@@ -1,0 +1,11 @@
+bin/
+obj/
+
+.appdata/
+.dotnet/
+.nuget/
+
+ServiceAirports.Api/out/
+ServiceAirports.Api/out.tar
+ServiceAirports.Api/run.err.log
+ServiceAirports.Api/run.out.log
