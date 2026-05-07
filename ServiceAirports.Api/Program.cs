@@ -1,3 +1,4 @@
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Logs;
@@ -14,6 +15,7 @@ var serviceName = builder.Configuration.GetValue<string>("OpenTelemetry:ServiceN
 var serviceVersion = typeof(Program).Assembly.GetName().Version?.ToString();
 var otlpEndpoint = builder.Configuration.GetValue<string>("OpenTelemetry:OtlpEndpoint");
 var useConsoleExporter = builder.Configuration.GetValue<bool>("OpenTelemetry:UseConsoleExporter");
+var azureMonitorConnectionString = builder.Configuration.GetValue<string>("AzureMonitor:ConnectionString");
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -38,43 +40,52 @@ builder.Logging.AddOpenTelemetry(logging =>
     }
 });
 
-builder.Services.AddOpenTelemetry()
+var openTelemetry = builder.Services.AddOpenTelemetry()
     .ConfigureResource(resource => resource.AddService(
         serviceName: serviceName,
-        serviceVersion: serviceVersion))
-    .WithTracing(tracing =>
+        serviceVersion: serviceVersion));
+
+if (!string.IsNullOrWhiteSpace(azureMonitorConnectionString))
+{
+    openTelemetry.UseAzureMonitor(options =>
     {
-        tracing
-            .AddAspNetCoreInstrumentation(options => options.RecordException = true)
-            .AddHttpClientInstrumentation();
-
-        if (useConsoleExporter)
-        {
-            tracing.AddConsoleExporter();
-        }
-
-        if (!string.IsNullOrWhiteSpace(otlpEndpoint))
-        {
-            tracing.AddOtlpExporter(options => options.Endpoint = new Uri(otlpEndpoint));
-        }
-    })
-    .WithMetrics(metrics =>
-    {
-        metrics
-            .AddAspNetCoreInstrumentation()
-            .AddHttpClientInstrumentation()
-            .AddRuntimeInstrumentation();
-
-        if (useConsoleExporter)
-        {
-            metrics.AddConsoleExporter();
-        }
-
-        if (!string.IsNullOrWhiteSpace(otlpEndpoint))
-        {
-            metrics.AddOtlpExporter(options => options.Endpoint = new Uri(otlpEndpoint));
-        }
+        options.ConnectionString = azureMonitorConnectionString;
     });
+}
+
+openTelemetry.WithTracing(tracing =>
+{
+    tracing
+        .AddAspNetCoreInstrumentation(options => options.RecordException = true)
+        .AddHttpClientInstrumentation();
+
+    if (useConsoleExporter)
+    {
+        tracing.AddConsoleExporter();
+    }
+
+    if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+    {
+        tracing.AddOtlpExporter(options => options.Endpoint = new Uri(otlpEndpoint));
+    }
+})
+.WithMetrics(metrics =>
+{
+    metrics
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddRuntimeInstrumentation();
+
+    if (useConsoleExporter)
+    {
+        metrics.AddConsoleExporter();
+    }
+
+    if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+    {
+        metrics.AddOtlpExporter(options => options.Endpoint = new Uri(otlpEndpoint));
+    }
+});
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' was not found.");
